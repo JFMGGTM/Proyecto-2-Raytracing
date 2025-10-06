@@ -12,28 +12,26 @@ pub struct Anim {
     pub eye_h: f32,
     pub sky_mix: f32,
 }
-
-/// Altura “suave” para dos lomitas. Mantengo valores chicos para no romper siluetas.
+.
 fn height(x: i32, z: i32) -> i32 {
     let xf = x as f32;
     let zf = z as f32;
 
-    // centros de las lomitas
+    // centros de las colinas
     let c1 = (5.0, 5.0);
     let c2 = (11.0, 12.0);
 
     let d1 = ((xf - c1.0).hypot(zf - c1.1) / 4.0).min(3.0);
     let d2 = ((xf - c2.0).hypot(zf - c2.1) / 4.5).min(3.0);
 
-    // dos cúpulas suaves (0..~2)
+
     let h1 = (1.8 - d1).max(0.0);
     let h2 = (2.2 - d2).max(0.0);
 
-    let base = 1.0; // piso mínimo
-    (base + h1 + h2).round() as i32  // 1..4 aprox
+    let base = 1.0;
+    (base + h1 + h2).round() as i32 
 }
 
-/// Helper: empuja un cubo (bloque unitario) al vector.
 fn push_block(cubes: &mut Vec<Aabb>, x: f32, y: f32, z: f32, mat_id: usize, face_tex: [usize; 6]) {
     cubes.push(Aabb {
         min: Vec3::new(x, y, z),
@@ -50,9 +48,9 @@ pub fn build_scene_minecraft(t: f32) -> (Scene, Anim) {
     let sun_dir = Vec3::new(az.cos(), elev, az.sin()).norm();
     let dayness = (elev * 1.2).clamp(0.0, 1.0);
     let sky_mix = 1.0 - dayness;
-    let sun_col = Color::new(1.0, 0.95, 0.85).mul(0.9 + 0.3 * dayness); // un poquito más brillante
+    let sun_col = Color::new(1.0, 0.95, 0.85).mul(0.9 + 0.3 * dayness); 
 
-    // carga de texturas (con fallback procedural)
+    // carga de texturas (con previsión de fallos)
     let tx = |name: &str, kind: TexKind| {
         Texture::from_ppm(&format!("assets/textures/{}.ppm", name)).unwrap_or(Texture::new(kind))
     };
@@ -87,15 +85,14 @@ pub fn build_scene_minecraft(t: f32) -> (Scene, Anim) {
     let grass_faces = [1, 1, 2, 0, 1, 1];               // césped con top/side/dirt
     let one_tex = |tid: usize| [tid, tid, tid, tid, tid, tid];
 
-    // --- Terreno 16x16 con lomitas ---
+    // --- Terreno 16x16  ---
     let mut cubes: Vec<Aabb> = Vec::new();
     let size = 16;
 
-    // Reservo un área para el lago (no se colocan bloques altos ahí)
     let lake_min = (10, 2);
     let lake_max = (15, 6);
 
-    // Lava aislada (esquina superior derecha)
+    // Lava
     let lava_min = (13, 13);
     let lava_max = (15, 15);
 
@@ -106,19 +103,19 @@ pub fn build_scene_minecraft(t: f32) -> (Scene, Anim) {
 
             // altura del terreno
             let mut h = height(x as i32, z as i32);
-            if in_lake { h = 1; } // el lago queda despejado al nivel 1
-            if in_lava { h = 1; } // lava también a nivel base
+            if in_lake { h = 1; } 
+            if in_lava { h = 1; } 
 
-            // capas de tierra (relleno)
+            // capas de tierra
             for y in 0..(h - 1).max(0) {
                 push_block(&mut cubes, x as f32, y as f32, z as f32, 1, one_tex(2));
             }
-            // bloque superior (grass con texturas por cara)
+            // bloque superior
             push_block(&mut cubes, x as f32, (h - 1).max(0) as f32, z as f32, 0, grass_faces);
         }
     }
 
-    // --- Lago despejado (no toca la casa) ---
+    //  Lago
     cubes.push(Aabb {
         min: Vec3::new(lake_min.0 as f32, 1.0, lake_min.1 as f32),
         max: Vec3::new(lake_max.0 as f32, 1.08, lake_max.1 as f32),
@@ -126,7 +123,7 @@ pub fn build_scene_minecraft(t: f32) -> (Scene, Anim) {
         face_tex: Some(one_tex(8)),
     });
 
-    // --- Lava en su propia esquina ---
+    // Lava
     cubes.push(Aabb {
         min: Vec3::new(lava_min.0 as f32, 1.0, lava_min.1 as f32),
         max: Vec3::new((lava_max.0 + 1) as f32, 1.06, (lava_max.1 + 1) as f32),
@@ -134,7 +131,7 @@ pub fn build_scene_minecraft(t: f32) -> (Scene, Anim) {
         face_tex: Some(one_tex(9)),
     });
 
-    // --- Camino de cobble que cruza el valle ---
+    // Camino
     for x in 0..size {
         cubes.push(Aabb {
             min: Vec3::new(x as f32, 1.0, 8.0),
@@ -144,14 +141,10 @@ pub fn build_scene_minecraft(t: f32) -> (Scene, Anim) {
         });
     }
 
-    // --- Casa reubicada (no pisa el agua) ---
-    // La coloco en la lomita izquierda, adaptando su base a la altura local.
     let bx = 2; let bz = 9;        // esquina inferior-izquierda de la casa
     let base_h = height(bx as i32, bz as i32) as f32; // altura de referencia
     let base = Vec3::new(bx as f32, base_h, bz as f32);
 
-    // *** CIMENTOS *** (evita esquinas flotantes)
-    // Relleno con dirt desde la altura real del terreno de cada celda hasta base_h.
     for z in 0..5 {
         for x in 0..5 {
             let gh = height((bx + x) as i32, (bz + z) as i32) as i32;
@@ -162,14 +155,13 @@ pub fn build_scene_minecraft(t: f32) -> (Scene, Anim) {
         }
     }
 
-    // paredes X
     for z in 0..5 {
         for y in 0..4 {
             cubes.push(Aabb { min: base.add(Vec3::new(0.0, y as f32, z as f32)),  max: base.add(Vec3::new(0.5, y as f32 + 1.0, z as f32 + 1.0)), mat_id: 3, face_tex: Some(one_tex(4)) });
             cubes.push(Aabb { min: base.add(Vec3::new(4.5, y as f32, z as f32)), max: base.add(Vec3::new(5.0, y as f32 + 1.0, z as f32 + 1.0)), mat_id: 3, face_tex: Some(one_tex(4)) });
         }
     }
-    // paredes Z
+    
     for x in 0..5 {
         for y in 0..4 {
             cubes.push(Aabb { min: base.add(Vec3::new(x as f32, y as f32, 0.0)),  max: base.add(Vec3::new(x as f32 + 1.0, y as f32 + 1.0, 0.5)),   mat_id: 3, face_tex: Some(one_tex(4)) });
@@ -185,27 +177,26 @@ pub fn build_scene_minecraft(t: f32) -> (Scene, Anim) {
             cubes.push(Aabb { min: base.add(Vec3::new(x as f32, 4.0, z as f32)), max: base.add(Vec3::new(x as f32 + 1.0, 4.5, z as f32 + 1.0)), mat_id: 6, face_tex: Some(one_tex(7)) });
         }
     }
-    // bloque metálico reflectivo delante de la casa (para que se noten los reflejos)
+    // bloque metálico reflectivo delante de la casa
     cubes.push(Aabb {
         min: base.add(Vec3::new(5.5, 0.0, 1.5)),
         max: base.add(Vec3::new(6.5, 1.0, 2.5)),
-        mat_id: 9,                 // metal
+        mat_id: 9,                 
         face_tex: Some(one_tex(10)),
     });
 
-    // --- Árboles de distintos tamaños con COPA EN NIVELES ---
-    // (x, z, tronco_altura, niveles_de_copa, tamaño_base_copa)
+    // Arboles de distintos tamaños 
     let trees = vec![
-        (4, 4, 3, 3, 2),  // 3 niveles: 2 -> 1 -> 0 (tope 1x1)
-        (12, 11, 4, 4, 3),// 4 niveles: 3 -> 2 -> 1 -> 0
-        (8, 3, 2, 2, 2),  // 2 niveles: 2 -> 1 -> 0
+        (4, 4, 3, 3, 2), 
+        (12, 11, 4, 4, 3),
+        (8, 3, 2, 2, 2), 
         (6, 14, 5, 4, 3),
     ];
 
     for (tx, tz, trunk_h, levels, base_size) in trees {
         let th = height(tx as i32, tz as i32) as f32;
 
-        // tronco (0.5x0.5 centrado)
+        // tronco
         for y in 0..trunk_h {
             cubes.push(Aabb {
                 min: Vec3::new(tx as f32 + 0.25, th + y as f32, tz as f32 + 0.25),
@@ -214,26 +205,26 @@ pub fn build_scene_minecraft(t: f32) -> (Scene, Anim) {
             });
         }
 
-        // copa por niveles, cada nivel más pequeño y más alto
-        let crown_base_y = th + trunk_h as f32; // arranque de la copa
+        // copa de los arboles
+        let crown_base_y = th + trunk_h as f32; 
         for i in 0..levels {
-            let level_size = (base_size as i32 - i as i32).max(0); // 2->1->0...
+            let level_size = (base_size as i32 - i as i32).max(0); 
             let y = crown_base_y + i as f32;
-            // nivel cuadrado de (2*level_size + 1)^2 bloques; si size==0 => 1 bloque
+        
             for z in (tz - level_size)..=(tz + level_size) {
                 for x in (tx - level_size)..=(tx + level_size) {
-                    push_block(&mut cubes, x as f32, y, z as f32, 4, one_tex(5)); // hojas
+                    push_block(&mut cubes, x as f32, y, z as f32, 4, one_tex(5)); 
                 }
             }
         }
     }
 
-    // skybox opcional
+    // NOTA: Agregar skybox
     let skybox = CubeMap::from_folder("assets/skybox");
 
     let scene = Scene { cubes, materials, textures, sun_dir, sun_col, sky_mix, skybox };
 
-    // Cámara: una vuelta completa, altura un poco mayor para leer mejor el relieve
+    // Cámara: una vuelta completa
     let angle = std::f32::consts::PI * 2.0 * t;
     let radius = 18.0 + 1.5 * (0.5 - (t * 2.0 * std::f32::consts::PI).cos() * 0.5);
     let eye_h = 6.5;
@@ -242,7 +233,7 @@ pub fn build_scene_minecraft(t: f32) -> (Scene, Anim) {
     (scene, anim)
 }
 
-/* La escena básica no se usa en este flujo; si quisieras, puedes redirigirla aquí. */
+
 pub fn build_scene_basic(t: f32) -> (Scene, Anim) {
     build_scene_minecraft(t)
 }
