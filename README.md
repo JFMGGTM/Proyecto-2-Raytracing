@@ -1,6 +1,6 @@
 # 🧱 Proyecto 2 – Raytracing: *Minecraft Mine RT*
 
-> **Autor:** Juan M.  
+> **Autor:** Juan Menéndez 
 > **Curso:** Gráficas Computacionales  
 > **Lenguaje:** Rust  
 > **Tema:** Raytracer estilo *Minecraft*, con materiales, reflexión, refracción y skybox dinámico.
@@ -73,23 +73,6 @@ minecraft_mine_rt/
 
 ---
 
-## 📊 Autoevaluación según la rúbrica
-
-| Criterio | Descripción | Puntaje estimado |
-|-----------|-------------|------------------|
-| **Complejidad de la escena (30 pts)** | Terreno con altura, casa, árboles por niveles, lago y lava. | **28 / 30** |
-| **Atractivo visual (20 pts)** | Buena composición, materiales diferenciados, balance luz/día. | **18 / 20** |
-| **Rotación y zoom de cámara (20 pts)** | Animación completa en 360° con variación de distancia. | **20 / 20** |
-| **Variedad de materiales (5 pts × 5 máx)** | Césped, tierra, piedra, madera, hojas, vidrio, agua, lava. | **25 / 25** |
-| **Refracción (10 pts)** | Implementada en el material de **agua**. | **10 / 10** |
-| **Reflexión (5 pts)** | Implementada en **metal** (bloque decorativo). | **5 / 5** |
-| **Skybox (20 pts)** | Fondo día/noche interpolado dinámicamente. | **20 / 20** |
-
-**Total estimado:** **126 / 130 pts** ✨  
-> (los puntos subjetivos podrían variar según la apreciación del docente)
-
----
-
 ## 🧩 Cómo ejecutar
 
 1. Instalar **Rust**:
@@ -104,13 +87,6 @@ minecraft_mine_rt/
    ```bash
    ffmpeg -framerate 30 -i out/frame_%04d.ppm -pix_fmt yuv420p -crf 18 diorama.mp4
    ```
-
----
-
-## 📚 Reflexión final
-
-El proyecto permitió comprender en profundidad cómo funcionan los conceptos fundamentales del raytracing: intersección, normales, iluminación, reflexión y refracción.  
-Aunque la estética es sencilla, el resultado demuestra cómo con bloques y materiales bien definidos se puede lograr una **escena coherente, dinámica y visualmente agradable**.
 
 ---
 
