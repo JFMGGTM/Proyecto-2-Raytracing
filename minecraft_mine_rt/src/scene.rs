@@ -1,139 +1,76 @@
 use crate::aabb::Aabb;
-use crate::camera::Camera;
 use crate::color::Color;
 use crate::material::Material;
 use crate::math::Vec3;
 use crate::renderer::Scene;
+use crate::skybox::CubeMap;
 use crate::texture::{TexKind, Texture};
 
-// Animación de cámara (compartida)
 pub struct Anim {
-    pub angle: f32,   // órbita en radianes
-    pub radius: f32,  // distancia al objetivo
-    pub eye_h: f32,   // altura de la cámara
-    pub sky_mix: f32, // 0 día, 1 noche
+    pub angle: f32,
+    pub radius: f32,
+    pub eye_h: f32,
+    pub sky_mix: f32,
 }
 
-/* ===========================
-   INICIO DE MI ESCENA
-   =========================== */
-pub fn build_scene_basic(t: f32) -> (Scene, Anim) {
-    let elev = (std::f32::consts::PI * 2.0 * t).sin() * 0.6; // -0.6..0.6
-    let az = std::f32::consts::PI * 2.0 * t;
-    let sun_dir = Vec3::new(az.cos(), elev, az.sin()).norm();
-    let dayness = (elev * 1.2).clamp(0.0, 1.0); // cuanto más alto, más día
-    let sky_mix = 1.0 - dayness; // invertimos para mezclar sky nocturno
+/// Altura “suave” para dos lomitas. Mantengo valores chicos para no romper siluetas.
+fn height(x: i32, z: i32) -> i32 {
+    let xf = x as f32;
+    let zf = z as f32;
 
-    let sun_col = Color::new(1.0, 0.95, 0.85).mul(0.8 + 0.2 * dayness);
+    // centros de las lomitas
+    let c1 = (5.0, 5.0);
+    let c2 = (11.0, 12.0);
 
-    // Texturas (con fallback)
-    let textures = vec![
-        Texture::new(TexKind::Stone), // 0 piedra (antes checker)
-        Texture::new(TexKind::Wood),  // 1 madera
-        Texture::new(TexKind::Metal), // 2 metal
-        Texture::new(TexKind::Water), // 3 agua
-        Texture::new(TexKind::Lava),  // 4 lava
-    ];
+    let d1 = ((xf - c1.0).hypot(zf - c1.1) / 4.0).min(3.0);
+    let d2 = ((xf - c2.0).hypot(zf - c2.1) / 4.5).min(3.0);
 
-    // Materiales base
-    let materials = vec![
-        Material { tex_id: 0, albedo: 1.0, specular: 0.1, transparency: 0.0, reflectivity: 0.0, ior: 1.0, shininess: 32.0, emissive: Color::black() }, // piedra
-        Material { tex_id: 1, albedo: 1.0, specular: 0.05, transparency: 0.0, reflectivity: 0.0, ior: 1.0, shininess: 16.0, emissive: Color::black() }, // madera
-        Material { tex_id: 2, albedo: 0.9, specular: 0.9, transparency: 0.0, reflectivity: 0.6, ior: 1.0, shininess: 64.0, emissive: Color::black() },   // metal
-        Material { tex_id: 3, albedo: 0.98, specular: 0.5, transparency: 0.85, reflectivity: 0.05, ior: 1.33, shininess: 32.0, emissive: Color::black() }, // agua
-        Material { tex_id: 4, albedo: 1.0, specular: 0.2, transparency: 0.0, reflectivity: 0.0, ior: 1.0, shininess: 8.0, emissive: Color::new(1.8, 0.6, 0.1) }, // lava
-    ];
+    // dos cúpulas suaves (0..~2)
+    let h1 = (1.8 - d1).max(0.0);
+    let h2 = (2.2 - d2).max(0.0);
 
-    // Geometría de “mina” simplificada
-    let mut cubes: Vec<Aabb> = Vec::new();
-    for z in 0..12 {
-        for x in -2..=2 {
-            // piso
-            cubes.push(Aabb {
-                min: Vec3::new(x as f32, -1.0, z as f32),
-                max: Vec3::new(x as f32 + 1.0, 0.0, z as f32 + 1.0),
-                mat_id: 0,
-                face_tex: None,
-            });
-            // paredes
-            if x == -2 || x == 2 {
-                for y in 0..3 {
-                    cubes.push(Aabb {
-                        min: Vec3::new(x as f32, y as f32, z as f32),
-                        max: Vec3::new(x as f32 + 1.0, y as f32 + 1.0, z as f32 + 1.0),
-                        mat_id: 0,
-                        face_tex: None,
-                    });
-                }
-            }
-        }
-    }
-    // vigas de madera
-    for z in (0..12).step_by(3) {
-        cubes.push(Aabb { min: Vec3::new(-2.0, 0.0, z as f32), max: Vec3::new(-1.0, 3.0, z as f32 + 1.0), mat_id: 1, face_tex: None });
-        cubes.push(Aabb { min: Vec3::new( 2.0, 0.0, z as f32), max: Vec3::new( 3.0, 3.0, z as f32 + 1.0), mat_id: 1, face_tex: None });
-        cubes.push(Aabb { min: Vec3::new(-2.0, 3.0, z as f32), max: Vec3::new( 3.0, 4.0, z as f32 + 1.0), mat_id: 1, face_tex: None });
-    }
-    // riel
-    for z in 0..12 {
-        cubes.push(Aabb { min: Vec3::new(-0.2, -0.2, z as f32 + 0.25), max: Vec3::new(0.2, 0.0, z as f32 + 0.35), mat_id: 2, face_tex: None });
-        cubes.push(Aabb { min: Vec3::new(-0.2, -0.2, z as f32 + 0.65), max: Vec3::new(0.2, 0.0, z as f32 + 0.75), mat_id: 2, face_tex: None });
-    }
-    // agua y lava
-    cubes.push(Aabb { min: Vec3::new(-1.0, -0.05, 6.0), max: Vec3::new(1.0, 0.0, 7.5), mat_id: 3, face_tex: None });
-    cubes.push(Aabb { min: Vec3::new(-1.0, -0.2, 10.0), max: Vec3::new(1.5, -0.05, 11.5), mat_id: 4, face_tex: None });
-
-    let scene = Scene { cubes, materials, textures, sun_dir, sun_col, sky_mix };
-
-    let angle = std::f32::consts::PI * 2.0 * (t * 0.25);
-    let radius = 6.5 + 1.0 * (0.5 - (t * 2.0 * std::f32::consts::PI).cos() * 0.5);
-    let eye_h = 1.5;
-    let anim = Anim { angle, radius, eye_h, sky_mix };
-
-    (scene, anim)
+    let base = 1.0; // piso mínimo
+    (base + h1 + h2).round() as i32  // 1..4 aprox
 }
 
-/* ===========================
-   ESCENA
-   =========================== */
+/// Helper: empuja un cubo (bloque unitario) al vector.
+fn push_block(cubes: &mut Vec<Aabb>, x: f32, y: f32, z: f32, mat_id: usize, face_tex: [usize; 6]) {
+    cubes.push(Aabb {
+        min: Vec3::new(x, y, z),
+        max: Vec3::new(x + 1.0, y + 1.0, z + 1.0),
+        mat_id,
+        face_tex: Some(face_tex),
+    });
+}
+
 pub fn build_scene_minecraft(t: f32) -> (Scene, Anim) {
-    // Ciclo día/noche
+    // ciclo de sol
     let elev = (std::f32::consts::PI * 2.0 * t).sin() * 0.6;
     let az = std::f32::consts::PI * 2.0 * t;
     let sun_dir = Vec3::new(az.cos(), elev, az.sin()).norm();
     let dayness = (elev * 1.2).clamp(0.0, 1.0);
     let sky_mix = 1.0 - dayness;
-    let sun_col = Color::new(1.0, 0.95, 0.85).mul(0.8 + 0.2 * dayness);
+    let sun_col = Color::new(1.0, 0.95, 0.85).mul(0.9 + 0.3 * dayness); // un poquito más brillante
 
-    // Cargar texturas
+    // carga de texturas (con fallback procedural)
     let tx = |name: &str, kind: TexKind| {
         Texture::from_ppm(&format!("assets/textures/{}.ppm", name)).unwrap_or(Texture::new(kind))
     };
-    let tx_grass_top = tx("grass_top", TexKind::GrassTop);
-    let tx_grass_side = tx("grass_side", TexKind::GrassSide);
-    let tx_dirt = tx("dirt", TexKind::Dirt);
-    let tx_cobble = tx("cobble", TexKind::Cobble);
-    let tx_planks = tx("planks", TexKind::Wood);
-    let tx_leaves = tx("leaves", TexKind::Leaves);
-    let tx_glass = tx("glass", TexKind::Glass);
-    let tx_stone = tx("stone", TexKind::Stone);
-    let tx_water = tx("water", TexKind::Water);
-    let tx_lava = tx("lava", TexKind::Lava);
-
     let textures = vec![
-        tx_grass_top,  // 0
-        tx_grass_side, // 1
-        tx_dirt,       // 2
-        tx_cobble,     // 3
-        tx_planks,     // 4
-        tx_leaves,     // 5
-        tx_glass,      // 6
-        tx_stone,      // 7
-        tx_water,      // 8
-        tx_lava,       // 9
+        tx("grass_top",  TexKind::GrassTop),  // 0
+        tx("grass_side", TexKind::GrassSide), // 1
+        tx("dirt",       TexKind::Dirt),      // 2
+        tx("cobble",     TexKind::Cobble),    // 3
+        tx("planks",     TexKind::Wood),      // 4
+        tx("leaves",     TexKind::Leaves),    // 5
+        tx("glass",      TexKind::Glass),     // 6
+        tx("stone",      TexKind::Stone),     // 7
+        tx("water",      TexKind::Water),     // 8
+        tx("lava",       TexKind::Lava),      // 9
+        Texture::new(TexKind::Metal),         // 10
     ];
 
-    // Materiales
+    // materiales
     let mat_grass = Material { tex_id: 1, albedo: 1.0, specular: 0.05, transparency: 0.0, reflectivity: 0.0, ior: 1.0, shininess: 16.0, emissive: Color::black() };
     let mat_dirt  = Material { tex_id: 2, albedo: 1.0, specular: 0.02, transparency: 0.0, reflectivity: 0.0, ior: 1.0, shininess: 8.0,  emissive: Color::black() };
     let mat_cobb  = Material { tex_id: 3, albedo: 1.0, specular: 0.1,  transparency: 0.0, reflectivity: 0.0, ior: 1.0, shininess: 16.0, emissive: Color::black() };
@@ -143,142 +80,169 @@ pub fn build_scene_minecraft(t: f32) -> (Scene, Anim) {
     let mat_stone = Material { tex_id: 7, albedo: 1.0, specular: 0.1,  transparency: 0.0, reflectivity: 0.0, ior: 1.0, shininess: 16.0, emissive: Color::black() };
     let mat_water = Material { tex_id: 8, albedo: 0.98, specular: 0.5,  transparency: 0.9,  reflectivity: 0.05, ior: 1.33, shininess: 32.0, emissive: Color::black() };
     let mat_lava  = Material { tex_id: 9, albedo: 1.0, specular: 0.2,  transparency: 0.0,  reflectivity: 0.0, ior: 1.0,  shininess: 8.0,  emissive: Color::new(1.8, 0.6, 0.1) };
+    let mat_metal = Material { tex_id:10, albedo: 1.0, specular: 0.9,  transparency: 0.0,  reflectivity: 0.7, ior: 1.0,  shininess: 64.0, emissive: Color::black() };
 
-    let materials = vec![mat_grass, mat_dirt, mat_cobb, mat_wood, mat_leaf, mat_glass, mat_stone, mat_water, mat_lava];
+    let materials = vec![mat_grass, mat_dirt, mat_cobb, mat_wood, mat_leaf, mat_glass, mat_stone, mat_water, mat_lava, mat_metal];
 
-    // Utilidades
-    let grass_faces = [1, 1, 2, 0, 1, 1]; // -X:side, +X:side, -Y:dirt, +Y:top, -Z:side, +Z:side
+    let grass_faces = [1, 1, 2, 0, 1, 1];               // césped con top/side/dirt
     let one_tex = |tid: usize| [tid, tid, tid, tid, tid, tid];
 
-    // Geometría
+    // --- Terreno 16x16 con lomitas ---
     let mut cubes: Vec<Aabb> = Vec::new();
+    let size = 16;
 
-    // Planicie de grass blocks 16x16
-    let y0 = 0.0;
-    for z in 0..16 {
-        for x in 0..16 {
-            cubes.push(Aabb {
-                min: Vec3::new(x as f32, y0, z as f32),
-                max: Vec3::new(x as f32 + 1.0, y0 + 1.0, z as f32 + 1.0),
-                mat_id: 0, // mat_grass
-                face_tex: Some(grass_faces),
-            });
+    // Reservo un área para el lago (no se colocan bloques altos ahí)
+    let lake_min = (10, 2);
+    let lake_max = (15, 6);
+
+    // Lava aislada (esquina superior derecha)
+    let lava_min = (13, 13);
+    let lava_max = (15, 15);
+
+    for z in 0..size {
+        for x in 0..size {
+            let in_lake = x >= lake_min.0 && x < lake_max.0 && z >= lake_min.1 && z < lake_max.1;
+            let in_lava = x >= lava_min.0 && x <= lava_max.0 && z >= lava_min.1 && z <= lava_max.1;
+
+            // altura del terreno
+            let mut h = height(x as i32, z as i32);
+            if in_lake { h = 1; } // el lago queda despejado al nivel 1
+            if in_lava { h = 1; } // lava también a nivel base
+
+            // capas de tierra (relleno)
+            for y in 0..(h - 1).max(0) {
+                push_block(&mut cubes, x as f32, y as f32, z as f32, 1, one_tex(2));
+            }
+            // bloque superior (grass con texturas por cara)
+            push_block(&mut cubes, x as f32, (h - 1).max(0) as f32, z as f32, 0, grass_faces);
         }
     }
 
-    // Camino de adoquín
-    for z in 0..16 {
-        cubes.push(Aabb {
-            min: Vec3::new(7.0, y0 + 1.0, z as f32),
-            max: Vec3::new(9.0, y0 + 1.1, z as f32 + 1.0),
-            mat_id: 2, // cobble
-            face_tex: Some(one_tex(3)),
-        });
-    }
-
-    // Charco de agua y de lava
+    // --- Lago despejado (no toca la casa) ---
     cubes.push(Aabb {
-        min: Vec3::new(2.0, y0 + 1.0, 3.0),
-        max: Vec3::new(6.0, y0 + 1.05, 7.0),
+        min: Vec3::new(lake_min.0 as f32, 1.0, lake_min.1 as f32),
+        max: Vec3::new(lake_max.0 as f32, 1.08, lake_max.1 as f32),
         mat_id: 7, // water
         face_tex: Some(one_tex(8)),
     });
+
+    // --- Lava en su propia esquina ---
     cubes.push(Aabb {
-        min: Vec3::new(11.0, y0 + 1.0, 10.0),
-        max: Vec3::new(14.0, y0 + 1.05, 13.0),
+        min: Vec3::new(lava_min.0 as f32, 1.0, lava_min.1 as f32),
+        max: Vec3::new((lava_max.0 + 1) as f32, 1.06, (lava_max.1 + 1) as f32),
         mat_id: 8, // lava
         face_tex: Some(one_tex(9)),
     });
 
-    // NOTA: Casa de madera 5x4x5 con techo de piedra y ventanas de vidrio
-    let base = Vec3::new(5.0, y0 + 1.0, 5.0);
-    for z in 0..5 {
-        for y in 0..4 {
-            // pared X=5
-            cubes.push(Aabb {
-                min: base.add(Vec3::new(0.0, y as f32, z as f32)),
-                max: base.add(Vec3::new(0.5, y as f32 + 1.0, z as f32 + 1.0)),
-                mat_id: 3,
-                face_tex: Some(one_tex(4)),
-            });
-            // pared X=9
-            cubes.push(Aabb {
-                min: base.add(Vec3::new(4.5, y as f32, z as f32)),
-                max: base.add(Vec3::new(5.0, y as f32 + 1.0, z as f32 + 1.0)),
-                mat_id: 3,
-                face_tex: Some(one_tex(4)),
-            });
-        }
-    }
-    for x in 0..5 {
-        for y in 0..4 {
-            // pared Z=5
-            cubes.push(Aabb {
-                min: base.add(Vec3::new(x as f32, y as f32, 0.0)),
-                max: base.add(Vec3::new(x as f32 + 1.0, y as f32 + 1.0, 0.5)),
-                mat_id: 3,
-                face_tex: Some(one_tex(4)),
-            });
-            // pared Z=9
-            cubes.push(Aabb {
-                min: base.add(Vec3::new(x as f32, y as f32, 4.5)),
-                max: base.add(Vec3::new(x as f32 + 1.0, y as f32 + 1.0, 5.0)),
-                mat_id: 3,
-                face_tex: Some(one_tex(4)),
-            });
-        }
-    }
-    // Ventanas de vidrio
-    cubes.push(Aabb {
-        min: base.add(Vec3::new(2.0, 1.0, 0.0)),
-        max: base.add(Vec3::new(3.0, 2.0, 0.5)),
-        mat_id: 5,
-        face_tex: Some(one_tex(6)),
-    });
-    cubes.push(Aabb {
-        min: base.add(Vec3::new(2.0, 1.0, 4.5)),
-        max: base.add(Vec3::new(3.0, 2.0, 5.0)),
-        mat_id: 5,
-        face_tex: Some(one_tex(6)),
-    });
-    // Techo de piedra
-    for z in 0..5 {
-        for x in 0..5 {
-            cubes.push(Aabb {
-                min: base.add(Vec3::new(x as f32, 4.0, z as f32)),
-                max: base.add(Vec3::new(x as f32 + 1.0, 4.5, z as f32 + 1.0)),
-                mat_id: 6,
-                face_tex: Some(one_tex(7)),
-            });
-        }
-    }
-
-    // Árbol: tronco
-    for y in 0..4 {
+    // --- Camino de cobble que cruza el valle ---
+    for x in 0..size {
         cubes.push(Aabb {
-            min: Vec3::new(3.0, y0 + 1.0 + y as f32, 12.0),
-            max: Vec3::new(3.5, y0 + 2.0 + y as f32, 12.5),
-            mat_id: 3,
-            face_tex: Some(one_tex(4)),
+            min: Vec3::new(x as f32, 1.0, 8.0),
+            max: Vec3::new(x as f32 + 1.0, 1.1, 9.0),
+            mat_id: 2,
+            face_tex: Some(one_tex(3)),
         });
     }
-    for z in 11..=13 {
-        for x in 2..=4 {
-            cubes.push(Aabb {
-                min: Vec3::new(x as f32, y0 + 4.0, z as f32),
-                max: Vec3::new(x as f32 + 1.0, y0 + 5.0, z as f32 + 1.0),
-                mat_id: 4,
-                face_tex: Some(one_tex(5)),
-            });
+
+    // --- Casa reubicada (no pisa el agua) ---
+    // La coloco en la lomita izquierda, adaptando su base a la altura local.
+    let bx = 2; let bz = 9;        // esquina inferior-izquierda de la casa
+    let base_h = height(bx as i32, bz as i32) as f32; // altura de referencia
+    let base = Vec3::new(bx as f32, base_h, bz as f32);
+
+    // *** CIMENTOS *** (evita esquinas flotantes)
+    // Relleno con dirt desde la altura real del terreno de cada celda hasta base_h.
+    for z in 0..5 {
+        for x in 0..5 {
+            let gh = height((bx + x) as i32, (bz + z) as i32) as i32;
+            let top = base_h as i32;
+            for y in gh..top {
+                push_block(&mut cubes, (bx + x) as f32, y as f32, (bz + z) as f32, 1, one_tex(2));
+            }
         }
     }
 
-    let scene = Scene { cubes, materials, textures, sun_dir, sun_col, sky_mix };
+    // paredes X
+    for z in 0..5 {
+        for y in 0..4 {
+            cubes.push(Aabb { min: base.add(Vec3::new(0.0, y as f32, z as f32)),  max: base.add(Vec3::new(0.5, y as f32 + 1.0, z as f32 + 1.0)), mat_id: 3, face_tex: Some(one_tex(4)) });
+            cubes.push(Aabb { min: base.add(Vec3::new(4.5, y as f32, z as f32)), max: base.add(Vec3::new(5.0, y as f32 + 1.0, z as f32 + 1.0)), mat_id: 3, face_tex: Some(one_tex(4)) });
+        }
+    }
+    // paredes Z
+    for x in 0..5 {
+        for y in 0..4 {
+            cubes.push(Aabb { min: base.add(Vec3::new(x as f32, y as f32, 0.0)),  max: base.add(Vec3::new(x as f32 + 1.0, y as f32 + 1.0, 0.5)),   mat_id: 3, face_tex: Some(one_tex(4)) });
+            cubes.push(Aabb { min: base.add(Vec3::new(x as f32, y as f32, 4.5)),  max: base.add(Vec3::new(x as f32 + 1.0, y as f32 + 1.0, 5.0)),   mat_id: 3, face_tex: Some(one_tex(4)) });
+        }
+    }
+    // ventanas
+    cubes.push(Aabb { min: base.add(Vec3::new(2.0, 1.0, 0.0)),  max: base.add(Vec3::new(3.0, 2.0, 0.5)),  mat_id: 5, face_tex: Some(one_tex(6)) });
+    cubes.push(Aabb { min: base.add(Vec3::new(2.0, 1.0, 4.5)),  max: base.add(Vec3::new(3.0, 2.0, 5.0)),  mat_id: 5, face_tex: Some(one_tex(6)) });
+    // techo de piedra
+    for z in 0..5 {
+        for x in 0..5 {
+            cubes.push(Aabb { min: base.add(Vec3::new(x as f32, 4.0, z as f32)), max: base.add(Vec3::new(x as f32 + 1.0, 4.5, z as f32 + 1.0)), mat_id: 6, face_tex: Some(one_tex(7)) });
+        }
+    }
+    // bloque metálico reflectivo delante de la casa (para que se noten los reflejos)
+    cubes.push(Aabb {
+        min: base.add(Vec3::new(5.5, 0.0, 1.5)),
+        max: base.add(Vec3::new(6.5, 1.0, 2.5)),
+        mat_id: 9,                 // metal
+        face_tex: Some(one_tex(10)),
+    });
 
-    let angle = std::f32::consts::PI * 2.0 * (t * 0.2);
-    let radius = 18.0 + 2.0 * (0.5 - (t * 2.0 * std::f32::consts::PI).cos() * 0.5);
-    let eye_h = 6.0;
+    // --- Árboles de distintos tamaños con COPA EN NIVELES ---
+    // (x, z, tronco_altura, niveles_de_copa, tamaño_base_copa)
+    let trees = vec![
+        (4, 4, 3, 3, 2),  // 3 niveles: 2 -> 1 -> 0 (tope 1x1)
+        (12, 11, 4, 4, 3),// 4 niveles: 3 -> 2 -> 1 -> 0
+        (8, 3, 2, 2, 2),  // 2 niveles: 2 -> 1 -> 0
+        (6, 14, 5, 4, 3),
+    ];
+
+    for (tx, tz, trunk_h, levels, base_size) in trees {
+        let th = height(tx as i32, tz as i32) as f32;
+
+        // tronco (0.5x0.5 centrado)
+        for y in 0..trunk_h {
+            cubes.push(Aabb {
+                min: Vec3::new(tx as f32 + 0.25, th + y as f32, tz as f32 + 0.25),
+                max: Vec3::new(tx as f32 + 0.75, th + y as f32 + 1.0, tz as f32 + 0.75),
+                mat_id: 3, face_tex: Some(one_tex(4)),
+            });
+        }
+
+        // copa por niveles, cada nivel más pequeño y más alto
+        let crown_base_y = th + trunk_h as f32; // arranque de la copa
+        for i in 0..levels {
+            let level_size = (base_size as i32 - i as i32).max(0); // 2->1->0...
+            let y = crown_base_y + i as f32;
+            // nivel cuadrado de (2*level_size + 1)^2 bloques; si size==0 => 1 bloque
+            for z in (tz - level_size)..=(tz + level_size) {
+                for x in (tx - level_size)..=(tx + level_size) {
+                    push_block(&mut cubes, x as f32, y, z as f32, 4, one_tex(5)); // hojas
+                }
+            }
+        }
+    }
+
+    // skybox opcional
+    let skybox = CubeMap::from_folder("assets/skybox");
+
+    let scene = Scene { cubes, materials, textures, sun_dir, sun_col, sky_mix, skybox };
+
+    // Cámara: una vuelta completa, altura un poco mayor para leer mejor el relieve
+    let angle = std::f32::consts::PI * 2.0 * t;
+    let radius = 18.0 + 1.5 * (0.5 - (t * 2.0 * std::f32::consts::PI).cos() * 0.5);
+    let eye_h = 6.5;
     let anim = Anim { angle, radius, eye_h, sky_mix };
 
     (scene, anim)
+}
+
+/* La escena básica no se usa en este flujo; si quisieras, puedes redirigirla aquí. */
+pub fn build_scene_basic(t: f32) -> (Scene, Anim) {
+    build_scene_minecraft(t)
 }

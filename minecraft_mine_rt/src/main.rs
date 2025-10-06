@@ -15,12 +15,14 @@ fn main() {
     // Config render
     let width: usize = 640;
     let height: usize = 360;
-    let frames: usize = 60; 
+    // 180 frames ≈ 6s a 30fps. La cámara da UNA vuelta completa en este lapso.
+    let frames: usize = 180;
     fs::create_dir_all("out").ok();
 
     for f in 0..frames {
         let t = f as f32 / (frames as f32 - 1.0); // 0..1
 
+        // Elige escena
         // let (scene, anim) = build_scene_basic(t);
         let (scene, anim) = build_scene_minecraft(t);
 
